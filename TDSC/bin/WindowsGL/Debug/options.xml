@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<Options xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <LeftKey>Left</LeftKey>
+  <RightKey>Right</RightKey>
+  <DownKey>Down</DownKey>
+  <UpKey>Up</UpKey>
+  <RestartKey>R</RestartKey>
+  <volume>0.299999923</volume>
+</Options>
