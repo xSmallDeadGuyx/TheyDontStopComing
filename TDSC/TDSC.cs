@@ -19,14 +19,16 @@ namespace TheyDontStopComing {
 		public Keys DownKey;
 		public Keys UpKey;
 		public Keys RestartKey;
+		public Keys ExitKey;
 		public float volume;
 		public Options() {}
-		public Options(Keys l, Keys r, Keys d, Keys u, Keys re, float v) {
+		public Options(Keys l, Keys r, Keys d, Keys u, Keys re, Keys e, float v) {
 			LeftKey = l;
 			RightKey = r;
 			DownKey = d;
 			UpKey = u;
 			RestartKey = re;
+			ExitKey = e;
 			volume = v;
 		}
 	}
@@ -41,7 +43,8 @@ namespace TheyDontStopComing {
 		MouseState msPrev;
 		KeyboardState kbPrev;
 
-		Map map;
+		public Map map;
+		public MapEditor mapEditor;
 
 		public FontRenderer fontRenderer;
 		public FontRenderer largeFontRenderer;
@@ -55,11 +58,13 @@ namespace TheyDontStopComing {
 		public Keys upKey = Keys.Up;
 		public Keys downKey = Keys.Down;
 		public Keys restartKey = Keys.R;
+		public Keys exitKey = Keys.Escape;
 		bool choosingLeft = false;
 		bool choosingRight = false;
 		bool choosingUp = false;
 		bool choosingDown = false;
 		bool choosingRestart = false;
+		bool choosingExit = false;
 
 		int totalOptionsHeight;
 		int maxOptionsWidth;
@@ -74,12 +79,13 @@ namespace TheyDontStopComing {
 			graphics.PreferredBackBufferHeight = 672;
 
 			map = new Map(this);
+			mapEditor = new MapEditor(this);
 		}
 
 		public void saveKeys() {
 			string filename = "options.xml";
 			FileStream stream = File.Open(filename, FileMode.OpenOrCreate);
-			Options ko = new Options(leftKey, rightKey, downKey, upKey, restartKey, music.Volume);
+			Options ko = new Options(leftKey, rightKey, downKey, upKey, restartKey, exitKey, music.Volume);
 			XmlSerializer serializer = new XmlSerializer(typeof(Options));
 			serializer.Serialize(stream, ko);
 			stream.Close();
@@ -100,12 +106,14 @@ namespace TheyDontStopComing {
 			downKey = ko.DownKey;
 			upKey = ko.UpKey;
 			restartKey = ko.RestartKey;
+			exitKey = ko.ExitKey;
 			music.Volume = ko.volume;
 		}
 
 		protected override void Initialize() {
 			base.Initialize();
 			map.init();
+			mapEditor.init();
 			msPrev = Mouse.GetState();
 			kbPrev = Keyboard.GetState();
 		}
@@ -123,10 +131,10 @@ namespace TheyDontStopComing {
 			fontRenderer = new FontRenderer(FontLoader.Load(Path.Combine(Content.RootDirectory, "visitor.fnt")), Content.Load<Texture2D>("visitor_0.png"), spriteBatch);
 			largeFontRenderer = new FontRenderer(FontLoader.Load(Path.Combine(Content.RootDirectory, "visitorL.fnt")), Content.Load<Texture2D>("visitorL_0.png"), spriteBatch);
 
-			totalMainMenuHeight = largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 120;
-			maxMainMenuWidth = Math.Max(Math.Max(fontRenderer.GetTextWidth("Play"), fontRenderer.GetTextWidth("Options")), fontRenderer.GetTextWidth("Quit")) + 40;
+			totalMainMenuHeight = largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 200;
+			maxMainMenuWidth = Math.Max(Math.Max(Math.Max(Math.Max(fontRenderer.GetTextWidth("Play"), fontRenderer.GetTextWidth("Options")), fontRenderer.GetTextWidth("Quit")), fontRenderer.GetTextWidth("Map Editor")), fontRenderer.GetTextWidth("Custom Level")) + 40;
 
-			totalOptionsHeight = 288;
+			totalOptionsHeight = 328;
 			maxOptionsWidth = fontRenderer.GetTextWidth("+ Volume level: 100% -") + 80;
 
 			totalWinHeight = largeFontRenderer.GetMaxHeight("You win, I think") + 80;
@@ -139,7 +147,7 @@ namespace TheyDontStopComing {
 		}
 
 		protected override void Update(GameTime gameTime) {
-			if(music.State == SoundState.Stopped)
+			if(music.State == SoundState.Stopped && music.Volume > 0f)
 				music.Play();
 
 			MouseState ms = Mouse.GetState();
@@ -153,14 +161,24 @@ namespace TheyDontStopComing {
 								state = GameState.InGame;
 							}
 							if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 44 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 84) {
-								state = GameState.Options;
+								map.loadCustomLevel();
+								state = GameState.InGame;
 							}
-							if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 84 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 124)
+							if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 84 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 124) {
+								mapEditor.clearLevel();
+								state = GameState.MapEditor;
+							}
+							if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 124 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 164)
+								state = GameState.Options;
+							if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 164 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 204)
 								Exit();
 						}
 					break;
 				case GameState.InGame:
 					map.update();
+					break;
+				case GameState.MapEditor:
+					mapEditor.update();
 					break;
 				case GameState.Options:
 					List<Keys> keysPressed = new List<Keys>();
@@ -180,6 +198,8 @@ namespace TheyDontStopComing {
 							upKey = Keys.None;
 						if(restartKey == keyChanged)
 							restartKey = Keys.None;
+						if(exitKey == keyChanged)
+							exitKey = Keys.None;
 
 						if(choosingLeft) {
 							leftKey = keyChanged;
@@ -201,10 +221,14 @@ namespace TheyDontStopComing {
 							restartKey = keyChanged;
 							choosingRestart = false;
 						}
+						else if(choosingExit) {
+							exitKey = keyChanged;
+							choosingExit = false;
+						}
 					}
 
 					if(ms.LeftButton == ButtonState.Pressed && msPrev.LeftButton == ButtonState.Released)
-						if(!choosingLeft && !choosingRight && !choosingDown && !choosingUp)
+						if(!choosingLeft && !choosingRight && !choosingDown && !choosingUp && !choosingRestart && !choosingExit)
 							if(ms.X >= (672 - maxOptionsWidth) / 2 && ms.X < (672 + maxOptionsWidth) / 2) {
 								if(ms.Y >= (672 - totalOptionsHeight) / 2 + 4 && ms.Y < (672 - totalOptionsHeight) / 2 + 44)
 									choosingLeft = true;
@@ -217,11 +241,18 @@ namespace TheyDontStopComing {
 								if(ms.Y >= (672 - totalOptionsHeight) / 2 + 164 && ms.Y < (672 - totalOptionsHeight) / 2 + 204)
 									choosingRestart = true;
 								if(ms.Y >= (672 - totalOptionsHeight) / 2 + 204 && ms.Y < (672 - totalOptionsHeight) / 2 + 244)
-									if(ms.X < 336 && music.Volume < 1f)
+									choosingExit = true;
+								if(ms.Y >= (672 - totalOptionsHeight) / 2 + 244 && ms.Y < (672 - totalOptionsHeight) / 2 + 284)
+									if(ms.X < 336 && music.Volume < 1f) {
 										music.Volume += 0.1f;
-									else if(ms.X >= 336 && music.Volume > 0f)
+										music.Play();
+									}
+									else if(ms.X >= 336 && music.Volume > 0f) {
 										music.Volume -= 0.1f;
-								if(ms.Y >= (672 - totalOptionsHeight) / 2 + 244 && ms.Y < (672 - totalOptionsHeight) / 2 + 284) {
+										if(music.Volume <= 0f)
+											music.Stop();
+									}
+								if(ms.Y >= (672 - totalOptionsHeight) / 2 + 284 && ms.Y < (672 - totalOptionsHeight) / 2 + 324) {
 									saveKeys();
 									state = GameState.MainMenu;
 								}
@@ -249,20 +280,29 @@ namespace TheyDontStopComing {
 				case GameState.MainMenu:
 					largeFontRenderer.DrawText((672 - largeFontRenderer.GetTextWidth("They Don't Stop Coming")) / 2, (672 - totalMainMenuHeight) / 2, "They Don't Stop Coming");
 					fontRenderer.DrawText((672 - maxMainMenuWidth) / 2 + 40, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 15, "Play");
-					fontRenderer.DrawText((672 - maxMainMenuWidth) / 2 + 40, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 55, "Options");
-					fontRenderer.DrawText((672 - maxMainMenuWidth) / 2 + 40, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 95, "Quit");
+					fontRenderer.DrawText((672 - maxMainMenuWidth) / 2 + 40, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 55, "Custom Level");
+					fontRenderer.DrawText((672 - maxMainMenuWidth) / 2 + 40, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 95, "Map Editor");
+					fontRenderer.DrawText((672 - maxMainMenuWidth) / 2 + 40, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 135, "Options");
+					fontRenderer.DrawText((672 - maxMainMenuWidth) / 2 + 40, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 175, "Quit");
 
 					if(ms.X >= (672 - maxMainMenuWidth) / 2 && ms.X < (672 + maxMainMenuWidth) / 2) {
 						if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 4 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 44)
 							DrawRectangle(new Rectangle((672 - maxMainMenuWidth) / 2, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 8, 32, 32), Color.Green);
-						if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 44 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 84)
+						if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 44 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 84 && File.Exists("mapeditor.xml"))
 							DrawRectangle(new Rectangle((672 - maxMainMenuWidth) / 2, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 48, 32, 32), Color.Blue);
 						if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 84 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 124)
-							DrawRectangle(new Rectangle((672 - maxMainMenuWidth) / 2, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 88, 32, 32), Color.Black);
+							DrawRectangle(new Rectangle((672 - maxMainMenuWidth) / 2, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 88, 32, 32), Color.Yellow);
+						if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 124 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 164)
+							DrawRectangle(new Rectangle((672 - maxMainMenuWidth) / 2, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 128, 32, 32), Color.Red);
+						if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 164 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 204)
+							DrawRectangle(new Rectangle((672 - maxMainMenuWidth) / 2, (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 168, 32, 32), Color.Black);
 					}
 					break;
 				case GameState.InGame:
 					map.draw();
+					break;
+				case GameState.MapEditor:
+					mapEditor.draw();
 					break;
 				case GameState.Options:
 					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 15, "Move left: " + (choosingLeft ? "<choosing>" : leftKey.ToString()));
@@ -270,8 +310,9 @@ namespace TheyDontStopComing {
 					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 95, "Move down: " + (choosingDown ? "<choosing>" : downKey.ToString()));
 					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 135, "Move up: " + (choosingUp ? "<choosing>" : upKey.ToString()));
 					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 175, "Restart level: " + (choosingRestart ? "<choosing>" : restartKey.ToString()));
-					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 215, "+ Volume level: " + Math.Round(100 * music.Volume) + "% -");
-					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 255, "Save & Return");
+					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 215, "Exit key: " + (choosingExit ? "<choosing>" : exitKey.ToString()));
+					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 255, "+ Volume level: " + Math.Round(100 * music.Volume) + "% -");
+					fontRenderer.DrawText((672 - maxOptionsWidth) / 2 + 40, (672 - totalOptionsHeight) / 2 + 295, "Save & Return");
 
 					if(ms.X >= (672 - maxOptionsWidth) / 2 && ms.X < (672 + maxOptionsWidth) / 2) {
 						if(ms.Y >= (672 - totalOptionsHeight) / 2 + 4 && ms.Y < (672 - totalOptionsHeight) / 2 + 44)
@@ -285,20 +326,22 @@ namespace TheyDontStopComing {
 						if(ms.Y >= (672 - totalOptionsHeight) / 2 + 164 && ms.Y < (672 - totalOptionsHeight) / 2 + 204)
 							DrawRectangle(new Rectangle((672 - maxOptionsWidth) / 2, (672 - totalOptionsHeight) / 2 + 168, 32, 32), Color.LightBlue);
 						if(ms.Y >= (672 - totalOptionsHeight) / 2 + 204 && ms.Y < (672 - totalOptionsHeight) / 2 + 244)
-							if(ms.X < 336)
-								DrawRectangle(new Rectangle((672 - maxOptionsWidth) / 2, (672 - totalOptionsHeight) / 2 + 208, 32, 32), Color.Orange);
-							else
-								DrawRectangle(new Rectangle((672 + maxOptionsWidth) / 2 - 32, (672 - totalOptionsHeight) / 2 + 208, 32, 32), Color.Orange);
+							DrawRectangle(new Rectangle((672 - maxOptionsWidth) / 2, (672 - totalOptionsHeight) / 2 + 208, 32, 32), Color.Magenta);
 						if(ms.Y >= (672 - totalOptionsHeight) / 2 + 244 && ms.Y < (672 - totalOptionsHeight) / 2 + 284)
-							DrawRectangle(new Rectangle((672 - maxOptionsWidth) / 2, (672 - totalOptionsHeight) / 2 + 248, 32, 32), Color.Black);
+							if(ms.X < 336)
+								DrawRectangle(new Rectangle((672 - maxOptionsWidth) / 2, (672 - totalOptionsHeight) / 2 + 248, 32, 32), Color.Orange);
+							else
+								DrawRectangle(new Rectangle((672 + maxOptionsWidth) / 2 - 32, (672 - totalOptionsHeight) / 2 + 248, 32, 32), Color.Orange);
+						if(ms.Y >= (672 - totalOptionsHeight) / 2 + 284 && ms.Y < (672 - totalOptionsHeight) / 2 + 324)
+							DrawRectangle(new Rectangle((672 - maxOptionsWidth) / 2, (672 - totalOptionsHeight) / 2 + 288, 32, 32), Color.Black);
 					}
 					break;
 				case GameState.Won:
-					largeFontRenderer.DrawText((672 - largeFontRenderer.GetTextWidth("You win, I think")) / 2, (672 - totalWinHeight) / 2, "You win, I think");
-					fontRenderer.DrawText((672 - fontRenderer.GetTextWidth("Why not try some custom levels?")) / 2, (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win, I think") + 15, "Why not try some custom levels?");
-					fontRenderer.DrawText((672 - fontRenderer.GetTextWidth("Back to main menu")) / 2 + 40, (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win, I think") + 55, "Back to main menu");
-					if(ms.X >= (672 - fontRenderer.GetTextWidth("Back to main menu")) / 2 && ms.X < (672 + fontRenderer.GetTextWidth("Back to main menu")) / 2 && ms.Y >= (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win, I think") + 48 && ms.Y < (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win, I think") + 88)
-						DrawRectangle(new Rectangle((672 - fontRenderer.GetTextWidth("Back to main menu")) / 2, (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win, I think") + 48, 32, 32), Color.Black);
+					largeFontRenderer.DrawText((672 - largeFontRenderer.GetTextWidth("You win!")) / 2, (672 - totalWinHeight) / 2, "You win!");
+					fontRenderer.DrawText((672 - fontRenderer.GetTextWidth("Apparently they do stop coming...")) / 2, (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win!") + 15, "Apparently they do stop coming...");
+					fontRenderer.DrawText((672 - fontRenderer.GetTextWidth("Back to main menu")) / 2 + 20, (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win!") + 55, "Back to main menu");
+					if(ms.X >= (672 - fontRenderer.GetTextWidth("Back to main menu")) / 2 - 20 && ms.X < (672 + fontRenderer.GetTextWidth("Back to main menu")) / 2 + 20 && ms.Y >= (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win!") + 48 && ms.Y < (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win, I think") + 88)
+						DrawRectangle(new Rectangle((672 - fontRenderer.GetTextWidth("Back to main menu")) / 2 - 20, (672 - totalWinHeight) / 2 + largeFontRenderer.GetMaxHeight("You win!") + 48, 32, 32), Color.Black);
 					break;
 			}
 

@@ -86,7 +86,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Content\music.wav">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Content\rectangle.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

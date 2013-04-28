@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using System.IO;
+using System.Xml.Serialization;
 
 namespace TheyDontStopComing {
 	public class Entity {
@@ -36,6 +38,9 @@ namespace TheyDontStopComing {
 		MapStore mapstore = new MapStore();
 		KeyboardState kbPrev = Keyboard.GetState();
 
+		bool isTest = false;
+		bool isCustom = false;
+
 		public Map(TDSC tdsc) {
 			this.tdsc = tdsc;
 		}
@@ -58,6 +63,8 @@ namespace TheyDontStopComing {
 		public void loadLevel(int n) {
 			levelLoaded = false;
 			level = n;
+			isTest = false;
+			isCustom = false;
 			if(n >= mapstore.maps.GetLength(0) || n < 0)
 				return;
 
@@ -122,13 +129,138 @@ namespace TheyDontStopComing {
 			levelLoaded = true;
 		}
 
+		public void loadTestLevel(char[,] map) {
+			levelLoaded = false;
+			isTest = true;
+			isCustom = false;
+
+			trails.Clear();
+			ais.Clear();
+			crates.Clear();
+			noCrates.Clear();
+			safe.Clear();
+
+			blocks = new bool[21, 21];
+			for(int i = 0; i < 21; i++)
+				for(int j = 0; j < 21; j++) {
+					blocks[i, j] = false;
+					switch(map[i, j]) {
+						case '#':
+							blocks[i, j] = true;
+							break;
+						case 'S':
+							player.pos = new Vector(32 * i, 32 * j);
+							break;
+						case 'E':
+							end = new Vector(i, j);
+							break;
+						case 'A':
+							Entity ai = new Entity();
+							ai.pos = new Vector(32 * i, 32 * j);
+							ai.color = Color.Red;
+							ai.canPushCrates = true;
+							ais.Add(ai);
+							break;
+						case 'C':
+							Entity crate = new Entity();
+							crate.pos = new Vector(32 * i, 32 * j);
+							crate.color = Color.Blue;
+							crates.Add(crate);
+							break;
+						case 'N':
+							Entity noCrate = new Entity();
+							noCrate.pos = new Vector(32 * i, 32 * j);
+							noCrate.color = Color.LightBlue;
+							noCrates.Add(noCrate);
+							break;
+						case 'G':
+							Entity s = new Entity();
+							s.pos = new Vector(32 * i, 32 * j);
+							s.color = Color.LightGray;
+							safe.Add(s);
+							break;
+					}
+				}
+
+			moving = false;
+			levelLoaded = true;
+		}
+
+		public void loadCustomLevel() {
+			FileStream stream = File.Open("mapeditor.xml", FileMode.OpenOrCreate, FileAccess.Read);
+			XmlSerializer serializer = new XmlSerializer(typeof(string[]));
+			string[] map = (string[]) serializer.Deserialize(stream);
+			levelLoaded = false;
+			isTest = false;
+			isCustom = true;
+
+			trails.Clear();
+			ais.Clear();
+			crates.Clear();
+			noCrates.Clear();
+			safe.Clear();
+
+			blocks = new bool[21, 21];
+			for(int i = 0; i < 21; i++)
+				for(int j = 0; j < 21; j++) {
+					blocks[i, j] = false;
+					if(map[j].Length == 0) continue;
+					switch(map[j][i]) {
+						case '#':
+							blocks[i, j] = true;
+							break;
+						case 'S':
+							player.pos = new Vector(32 * i, 32 * j);
+							break;
+						case 'E':
+							end = new Vector(i, j);
+							break;
+						case 'A':
+							Entity ai = new Entity();
+							ai.pos = new Vector(32 * i, 32 * j);
+							ai.color = Color.Red;
+							ai.canPushCrates = true;
+							ais.Add(ai);
+							break;
+						case 'C':
+							Entity crate = new Entity();
+							crate.pos = new Vector(32 * i, 32 * j);
+							crate.color = Color.Blue;
+							crates.Add(crate);
+							break;
+						case 'N':
+							Entity noCrate = new Entity();
+							noCrate.pos = new Vector(32 * i, 32 * j);
+							noCrate.color = Color.LightBlue;
+							noCrates.Add(noCrate);
+							break;
+						case 'G':
+							Entity s = new Entity();
+							s.pos = new Vector(32 * i, 32 * j);
+							s.color = Color.LightGray;
+							safe.Add(s);
+							break;
+					}
+				}
+
+			moving = false;
+			levelLoaded = true;
+			stream.Close();
+		}
+
 		public bool nextLevel() {
 			return level < mapstore.maps.GetLength(0) - 1;
 		}
 
 		public void resetLevel() {
-			if(levelLoaded)
-				loadLevel(level);
+			if(levelLoaded) {
+				if(isTest)
+					loadTestLevel(tdsc.mapEditor.level);
+				else if(isCustom)
+					loadCustomLevel();
+				else
+					loadLevel(level);
+			}
 		}
 
 		public void init() {
@@ -194,8 +326,14 @@ namespace TheyDontStopComing {
 			if(!levelLoaded) return;
 
 			KeyboardState kb = Keyboard.GetState();
-			if(kb.IsKeyDown(Keys.R) && !kbPrev.IsKeyDown(Keys.R))
+			if(kb.IsKeyDown(tdsc.restartKey) && !kbPrev.IsKeyDown(tdsc.restartKey))
 				resetLevel();
+			if(kb.IsKeyDown(tdsc.exitKey) && !kbPrev.IsKeyDown(tdsc.exitKey)) {
+				if(isTest)
+					tdsc.state = TDSC.GameState.MapEditor;
+				else if(isCustom)
+					tdsc.state = TDSC.GameState.MainMenu;
+			}
 
 			if(!moving) {
 				player.movement = new Vector(0, 0);
@@ -215,7 +353,12 @@ namespace TheyDontStopComing {
 			}
 
 			if(player.pos / 32 == end) {
-				if(nextLevel()) {
+				if(isTest) {
+					tdsc.state = TDSC.GameState.MapEditor;
+					return;
+				}
+
+				if(nextLevel() && !isCustom) {
 					level++;
 					loadLevel(level);
 				}
@@ -273,7 +416,12 @@ namespace TheyDontStopComing {
 				tdsc.DrawRectangle(new Rectangle(crate.pos.x, crate.pos.y, 32, 32), crate.color);
 			tdsc.DrawRectangle(new Rectangle(player.pos.x, player.pos.y, 32, 32), player.color);
 
-			tdsc.fontRenderer.DrawText(8, 640, mapstore.levelText[level]);
+			if(isTest)
+				tdsc.fontRenderer.DrawText(8, 640, "Press " + tdsc.exitKey + " to return to editor");
+			else if(isCustom)
+				tdsc.fontRenderer.DrawText(8, 640, "Press " + tdsc.exitKey + " to return to main menu");
+			else
+				tdsc.fontRenderer.DrawText(8, 640, mapstore.levelText[level]);
 		}
 	}
 }
