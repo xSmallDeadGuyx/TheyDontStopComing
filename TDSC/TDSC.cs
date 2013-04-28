@@ -160,7 +160,7 @@ namespace TheyDontStopComing {
 								map.loadLevel(0);
 								state = GameState.InGame;
 							}
-							if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 44 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 84) {
+							if(ms.Y >= (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 44 && ms.Y < (672 - totalMainMenuHeight) / 2 + largeFontRenderer.GetMaxHeight("They Don't Stop Coming") + 84 && File.Exists("mapeditor.xml")) {
 								map.loadCustomLevel();
 								state = GameState.InGame;
 							}
