@@ -45,6 +45,18 @@ namespace TheyDontStopComing {
 			this.tdsc = tdsc;
 		}
 
+		private string getTutorialString(int n) {
+			switch(n) {
+				case 0:
+					return "Use " + tdsc.leftKey + ", " + tdsc.rightKey + ", " + tdsc.upKey + ", " + tdsc.downKey + " to move";
+				case 1:
+					return "Use " + tdsc.exitKey + " to exit";
+				case 2:
+					return "Use " + tdsc.restartKey + " to restart";
+			}
+			return "";
+		}
+
 		public Entity player = new Entity(); // S
 		List<Entity> ais = new List<Entity>(); // A
 		List<Entity> crates = new List<Entity>(); // C
@@ -56,6 +68,8 @@ namespace TheyDontStopComing {
 		bool moving;
 		public static int speed = 8;
 		Pathfinder pathfinder;
+
+		bool paused = false;
 
 		public bool[,] blocks;
 		int level = 0;
@@ -326,102 +340,123 @@ namespace TheyDontStopComing {
 			if(!levelLoaded) return;
 
 			KeyboardState kb = Keyboard.GetState();
-			if(kb.IsKeyDown(tdsc.restartKey) && !kbPrev.IsKeyDown(tdsc.restartKey))
-				resetLevel();
-			if(kb.IsKeyDown(tdsc.exitKey) && !kbPrev.IsKeyDown(tdsc.exitKey)) {
-				if(isTest)
-					tdsc.state = TDSC.GameState.MapEditor;
-				else if(isCustom)
+
+			if(paused) {
+				if(kb.IsKeyDown(tdsc.exitKey) && !kbPrev.IsKeyDown(tdsc.exitKey))
 					tdsc.state = TDSC.GameState.MainMenu;
+				else if(kb.IsKeyDown(tdsc.restartKey) && !kbPrev.IsKeyDown(tdsc.restartKey)) {
+					paused = false;
+				}
 			}
-
-			if(!moving) {
-				player.movement = new Vector(0, 0);
-				if(kb.IsKeyDown(tdsc.leftKey) && !kbPrev.IsKeyDown(tdsc.leftKey))
-					player.movement += new Vector(-speed, 0);
-				if(kb.IsKeyDown(tdsc.rightKey) && !kbPrev.IsKeyDown(tdsc.rightKey))
-					player.movement += new Vector(speed, 0);
-				if(player.movement == new Vector(0, 0)) { // prevent diagonal movement
-					if(kb.IsKeyDown(tdsc.upKey) && !kbPrev.IsKeyDown(tdsc.upKey))
-						player.movement += new Vector(0, -speed);
-					if(kb.IsKeyDown(tdsc.downKey) && !kbPrev.IsKeyDown(tdsc.downKey))
-						player.movement += new Vector(0, speed);
+			else {
+				if(kb.IsKeyDown(tdsc.restartKey) && !kbPrev.IsKeyDown(tdsc.restartKey))
+					resetLevel();
+				if(kb.IsKeyDown(tdsc.exitKey) && !kbPrev.IsKeyDown(tdsc.exitKey)) {
+					if(isTest)
+						tdsc.state = TDSC.GameState.MapEditor;
+					else if(isCustom)
+						tdsc.state = TDSC.GameState.MainMenu;
+					else
+						paused = true;
 				}
 
-				if(player.movement != new Vector(0, 0) && canMoveTo(player.pos / 32 + player.movement / speed, player.pos / 32, player))
-					startPlayerMovement();
-			}
+				if(!moving) {
+					player.movement = new Vector(0, 0);
+					if(kb.IsKeyDown(tdsc.leftKey) && !kbPrev.IsKeyDown(tdsc.leftKey))
+						player.movement += new Vector(-speed, 0);
+					if(kb.IsKeyDown(tdsc.rightKey) && !kbPrev.IsKeyDown(tdsc.rightKey))
+						player.movement += new Vector(speed, 0);
+					if(player.movement == new Vector(0, 0)) { // prevent diagonal movement
+						if(kb.IsKeyDown(tdsc.upKey) && !kbPrev.IsKeyDown(tdsc.upKey))
+							player.movement += new Vector(0, -speed);
+						if(kb.IsKeyDown(tdsc.downKey) && !kbPrev.IsKeyDown(tdsc.downKey))
+							player.movement += new Vector(0, speed);
+					}
 
-			if(player.pos / 32 == end) {
-				if(isTest) {
-					tdsc.state = TDSC.GameState.MapEditor;
-					return;
+					if(player.movement != new Vector(0, 0) && canMoveTo(player.pos / 32 + player.movement / speed, player.pos / 32, player))
+						startPlayerMovement();
 				}
 
-				if(nextLevel() && !isCustom) {
-					level++;
-					loadLevel(level);
-				}
-				else
-					tdsc.winSequence();
-			}
+				if(player.pos / 32 == end) {
+					if(isTest) {
+						tdsc.state = TDSC.GameState.MapEditor;
+						return;
+					}
 
-			if(moving) {
-				trails.Add(player.getTrail());
-				player.pos += player.movement;
-
-				for(int i = 0; i < ais.Count; i++) {
-					trails.Add(ais[i].getTrail());
-					ais[i].pos += ais[i].movement;
+					if(nextLevel() && !isCustom) {
+						level++;
+						loadLevel(level);
+					}
+					else
+						tdsc.winSequence();
 				}
 
-				for(int i = 0; i < crates.Count; i++) {
-					crates[i].pos += crates[i].movement;
+				if(moving) {
+					trails.Add(player.getTrail());
+					player.pos += player.movement;
+
+					for(int i = 0; i < ais.Count; i++) {
+						trails.Add(ais[i].getTrail());
+						ais[i].pos += ais[i].movement;
+					}
+
+					for(int i = 0; i < crates.Count; i++) {
+						crates[i].pos += crates[i].movement;
+					}
+
+					if(player.pos.x % 32 == 0 && player.pos.y % 32 == 0)
+						endPlayerMovement();
 				}
 
-				if(player.pos.x % 32 == 0 && player.pos.y % 32 == 0)
-					endPlayerMovement();
+				List<Trail> trailsToRemove = new List<Trail>();
+				for(int i = 0; i < trails.Count; i++) {
+					if(trails[i].color.A <= 30)
+						trailsToRemove.Add(trails[i]);
+					else
+						trails[i].color.A -= 30;
+				}
+				foreach(Trail t in trailsToRemove)
+					trails.Remove(t);
 			}
-
-			List<Trail> trailsToRemove = new List<Trail>();
-			for(int i = 0; i < trails.Count; i++) {
-				if(trails[i].color.A <= 30)
-					trailsToRemove.Add(trails[i]);
-				else
-					trails[i].color.A -= 30;
-			}
-			foreach(Trail t in trailsToRemove)
-				trails.Remove(t);
-
 			kbPrev = kb;
 		}
 
 		public void draw() {
 			if(!levelLoaded) return;
-			for(int i = 0; i < 21; i++)
-				for(int j = 0; j < 21; j++)
-					if(blocks[i, j])
-						tdsc.DrawRectangle(new Rectangle(i * 32, j * 32, 32, 32), Color.Black);
-			tdsc.DrawRectangle(new Rectangle(end.x * 32, end.y * 32, 32, 32), Color.Yellow);
-			foreach(Entity n in noCrates)
-				tdsc.DrawRectangle(new Rectangle(n.pos.x, n.pos.y, 32, 32), n.color);
-			foreach(Entity s in safe)
-				tdsc.DrawRectangle(new Rectangle(s.pos.x, s.pos.y, 32, 32), s.color);
 
-			foreach(Trail t in trails)
-				tdsc.DrawRectangle(new Rectangle(t.pos.x, t.pos.y, 32, 32), t.color);
-			foreach(Entity ai in ais)
-				tdsc.DrawRectangle(new Rectangle(ai.pos.x, ai.pos.y, 32, 32), ai.color);
-			foreach(Entity crate in crates)
-				tdsc.DrawRectangle(new Rectangle(crate.pos.x, crate.pos.y, 32, 32), crate.color);
-			tdsc.DrawRectangle(new Rectangle(player.pos.x, player.pos.y, 32, 32), player.color);
+			if(paused) {
+				tdsc.fontRenderer.DrawText((672 - tdsc.fontRenderer.GetTextWidth("Press " + tdsc.exitKey + " to return to main menu")) / 2, 303, "Press " + tdsc.exitKey + " to return to main menu");
+				tdsc.fontRenderer.DrawText((672 - tdsc.fontRenderer.GetTextWidth("Press " + tdsc.restartKey + " to resume")) / 2, 343, "Press " + tdsc.restartKey + " to resume");
+			}
+			else {
+				for(int i = 0; i < 21; i++)
+					for(int j = 0; j < 21; j++)
+						if(blocks[i, j])
+							tdsc.DrawRectangle(new Rectangle(i * 32, j * 32, 32, 32), Color.Black);
+				tdsc.DrawRectangle(new Rectangle(end.x * 32, end.y * 32, 32, 32), Color.Yellow);
+				foreach(Entity n in noCrates)
+					tdsc.DrawRectangle(new Rectangle(n.pos.x, n.pos.y, 32, 32), n.color);
+				foreach(Entity s in safe)
+					tdsc.DrawRectangle(new Rectangle(s.pos.x, s.pos.y, 32, 32), s.color);
 
-			if(isTest)
-				tdsc.fontRenderer.DrawText(8, 640, "Press " + tdsc.exitKey + " to return to editor");
-			else if(isCustom)
-				tdsc.fontRenderer.DrawText(8, 640, "Press " + tdsc.exitKey + " to return to main menu");
-			else
-				tdsc.fontRenderer.DrawText(8, 640, mapstore.levelText[level]);
+				foreach(Trail t in trails)
+					tdsc.DrawRectangle(new Rectangle(t.pos.x, t.pos.y, 32, 32), t.color);
+				foreach(Entity ai in ais)
+					tdsc.DrawRectangle(new Rectangle(ai.pos.x, ai.pos.y, 32, 32), ai.color);
+				foreach(Entity crate in crates)
+					tdsc.DrawRectangle(new Rectangle(crate.pos.x, crate.pos.y, 32, 32), crate.color);
+				tdsc.DrawRectangle(new Rectangle(player.pos.x, player.pos.y, 32, 32), player.color);
+
+				if(!isTest && !isCustom)
+					tdsc.fontRenderer.DrawText(8, 8, getTutorialString(level));
+
+				if(isTest)
+					tdsc.fontRenderer.DrawText(8, 640, "Press " + tdsc.exitKey + " to return to editor");
+				else if(isCustom)
+					tdsc.fontRenderer.DrawText(8, 640, "Press " + tdsc.exitKey + " to return to main menu");
+				else
+					tdsc.fontRenderer.DrawText(8, 640, mapstore.levelText[level]);
+			}
 		}
 	}
 }
